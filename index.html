@@ -132,7 +132,7 @@ function setup(){
       awk:0,cd:0,bubble:null,bT:0,caught:false,fade:1,ring:0,inspected:false,late:false,bellCaught:false,
       rx:10,ry:-20,lx:-10,ly:-20,label:`${st.r+1}분단 ${st.c+1}번`};
   });
-  P={x:(ROOM.x0+ROOM.x1)/2,y:ROOM.y0+52,a:Math.PI/2,tx:null,ty:null,r:14,walk:0,path:null};camSetup(true);
+  P={vx:0,vy:0,x:(ROOM.x0+ROOM.x1)/2,y:ROOM.y0+52,a:Math.PI/2,tx:null,ty:null,r:14,walk:0,path:null};camSetup(true);
   leak=0;complaint=0;score=0;combo=0;msgs=[];sparks=[];stareT=null;stareAuto=false;autoSkip=null;lockT=null;stareTime=0;zoomK=null;floorDown=null;dragAim=false;JOY.id=null;JOY.on=false;
   stats={caught:0,wrong:0,noEv:0,checkCatch:0,inAct:0,bell:0,bellWrong:0};
   evDone=false;evT=rand(.3,.62)*D.exam;failReason='';
@@ -313,11 +313,22 @@ function update(dt){
   // 이동
   let vx=0,vy=0;
   if(keys.KeyW||keys.ArrowUp)vy=-1;if(keys.KeyS||keys.ArrowDown)vy=1;if(keys.KeyA||keys.ArrowLeft)vx=-1;if(keys.KeyD||keys.ArrowRight)vx=1;
-  if(!vx&&!vy&&JOY.on){const jx=(JOY.x-JOY.bx)/JOY.R,jy=(JOY.y-JOY.by)/JOY.R,m=Math.hypot(jx,jy);if(m>.18){const mm=Math.min(1,m);vx=jx/m*mm;vy=jy/m*mm}}
+  if(!vx&&!vy&&JOY.on){const jx=(JOY.x-JOY.bx)/JOY.R,jy=(JOY.y-JOY.by)/JOY.R,m=Math.hypot(jx,jy);if(m>.12){const mm=.35+.65*Math.min(1,(m-.12)/.7);vx=jx/m*mm;vy=jy/m*mm}}
   if(vx||vy){P.tx=null;P.path=null}
   else if(P.path&&P.path.length){const q=P.path[0],dx=q[0]-P.x,dy=q[1]-P.y,d=Math.hypot(dx,dy);if(d<5){P.path.shift();if(P.path.length){const q2=P.path[0],d2=Math.hypot(q2[0]-P.x,q2[1]-P.y)||1;vx=(q2[0]-P.x)/d2;vy=(q2[1]-P.y)/d2}}else{vx=dx/d;vy=dy/d}}
   const n=Math.hypot(vx,vy);
-  if(n){const sp=240*dt*Math.min(1,n),ox=P.x,oy=P.y;const nx=P.x+vx/n*sp,ny=P.y+vy/n*sp;if(!blocked(nx,P.y))P.x=nx;if(!blocked(P.x,ny))P.y=ny;if(P.x===ox&&P.y===oy){P.tx=null;P.path=null}else P.walk+=dt*10}
+  {const SPD=250,tvx=n?vx/n*SPD*Math.min(1,n):0,tvy=n?vy/n*SPD*Math.min(1,n):0,k=Math.min(1,dt*(n?14:20));
+   P.vx=(P.vx||0)+(tvx-(P.vx||0))*k;P.vy=(P.vy||0)+(tvy-(P.vy||0))*k;
+   const sp=Math.hypot(P.vx,P.vy);
+   if(sp>4){const ox=P.x,oy=P.y,mx=P.vx*dt,my=P.vy*dt;
+     if(!blocked(P.x+mx,P.y+my)){P.x+=mx;P.y+=my}
+     else{if(!blocked(P.x+mx,P.y))P.x+=mx;else P.vx*=.3;if(!blocked(P.x,P.y+my))P.y+=my;else P.vy*=.3}
+     if(P.x===ox&&P.y===oy){ // 책상 모서리에 걸리면 옆으로 미끄러지기
+       const L=Math.hypot(mx,my)||1,px=-my/L,py=mx/L,st=sp*dt;let ok=false;
+       for(const sg of[1,-1])for(const f of[.7,1.4,2.2]){const tx=P.x+(mx*.4+px*st*f*sg),ty=P.y+(my*.4+py*st*f*sg);if(!ok&&!blocked(tx,ty)){P.x=tx;P.y=ty;ok=true}}
+       if(!ok&&n&&!(P.path&&P.path.length)){P.vx=0;P.vy=0}
+       if(!ok&&P.path&&P.path.length){P.tx=null;P.path=null}}
+     if(P.x!==ox||P.y!==oy)P.walk+=dt*10*Math.min(1,sp/SPD)}}
   // 쳐다보기
   if(phase==='check'||phase==='exam'){
     if(stareT&&(stareT.caught||stareT.cd>0)){stareT=null;stareTime=0;zoomK=null;stareAuto=false}
@@ -338,11 +349,11 @@ function update(dt){
   // 시선 방향
   let ta=P.a;
   if(stareT)ta=Math.atan2(stareT.y-P.y,stareT.x-P.x);
-  else if(n&&(JOY.on||mouse.kind!=='mouse'))ta=Math.atan2(vy,vx);
+  else if(n&&(JOY.on||mouse.kind!=='mouse'))ta=Math.atan2(P.vy||vy,P.vx||vx);
   else if(dragAim||(mouse.kind==='mouse'&&inView(mouse)))ta=Math.atan2(mw.y-P.y,mw.x-P.x);
   else if(n)ta=Math.atan2(vy,vx);
-  let da=ta-P.a;while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;P.a+=da*Math.min(1,dt*24);
-  camFollow(Math.min(1,dt*8));if(mouse.kind==='mouse')mw=toWorld(mouse);
+  let da=ta-P.a;while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;P.a+=da*Math.min(1,dt*(stareT?18:12));
+  camFollow(Math.min(1,dt*6));if(mouse.kind==='mouse')mw=toWorld(mouse);
   for(const s of students)updStudent(s,dt);
   phaseT-=dt;
   if(phase==='check'&&phaseT<=0)startExam();
@@ -498,8 +509,9 @@ function drawStudent(s){
 function drawProctor(){
   const _bo=boilOn;boilOn=true;
   const x=P.x,y=P.y;
-  ctx.fillStyle='rgba(255,236,80,.32)';ctx.beginPath();ctx.moveTo(x,y);ctx.arc(x,y,480,P.a-.6,P.a+.6);ctx.closePath();ctx.fill();
-  ctx.strokeStyle='rgba(230,160,0,.9)';ctx.lineWidth=2.5;ctx.stroke();
+  if(phase==='exam'){const g=ctx.createRadialGradient(x,y,20,x,y,480);g.addColorStop(0,'rgba(255,236,80,.2)');g.addColorStop(.7,'rgba(255,236,80,.08)');g.addColorStop(1,'rgba(255,236,80,0)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(x,y);ctx.arc(x,y,480,P.a-.6,P.a+.6);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(230,160,0,.35)';ctx.lineWidth=2;ctx.setLineDash([8,10]);ctx.beginPath();ctx.moveTo(x+Math.cos(P.a-.6)*30,y+Math.sin(P.a-.6)*30);ctx.lineTo(x+Math.cos(P.a-.6)*200,y+Math.sin(P.a-.6)*200);ctx.moveTo(x+Math.cos(P.a+.6)*30,y+Math.sin(P.a+.6)*30);ctx.lineTo(x+Math.cos(P.a+.6)*200,y+Math.sin(P.a+.6)*200);ctx.stroke();ctx.setLineDash([])}
   ctx.save();ctx.translate(x,y);ctx.rotate(P.a+Math.PI/2);
   ctx.fillStyle='rgba(0,0,0,.22)';wellipse(ctx,3,5,23,14);ctx.fill();
   ctx.fillStyle='#2a4a9a';wellipse(ctx,0,0,22,13);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.stroke();
@@ -1380,6 +1392,7 @@ function draw(){
   for(const st of seats)drawDesk(st);
   drawProctor();
   for(const s of students)drawStudent(s);
+  if(state==='play'&&phase==='exam'){ctx.fillStyle='rgba(20,16,50,.16)';for(const s of students)if(!s.caught&&!watched(s)&&stareT!==s){ctx.beginPath();ctx.arc(s.x,s.y,30,0,7);ctx.fill()}}
   if(glareFx){const g=glareFx,hx=P.x+Math.cos(P.a)*8,hy=P.y+Math.sin(P.a)*8,tx=g.s.x,ty=g.s.y-4,n=9;
     for(const[cl,lw]of[[INK,9],['#ff5fb0',5],['#fff',1.8]]){ctx.strokeStyle=cl;ctx.lineWidth=lw;ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(hx,hy);
       for(let i=1;i<n;i++){const k=i/n,px=hx+(tx-hx)*k,py=hy+(ty-hy)*k,nx=-(ty-hy),ny=tx-hx,L=Math.hypot(nx,ny)||1,o=(i%2?1:-1)*9;ctx.lineTo(px+nx/L*o,py+ny/L*o)}ctx.lineTo(tx,ty);ctx.stroke()}
@@ -1409,7 +1422,7 @@ function skipIntro(p){if(it<18){it=17.99;itPrev=17.98}else if(it>18.6){if(!p||in
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('pointerdown',e=>{
   e.preventDefault();ac();const p=toCanvas(e);
-  if(joyActive()&&JOY.id===null){const b=joyBase();if(Math.hypot(p.x-b.x,p.y-b.y)<JOY.R+40){JOY.id=e.pointerId;JOY.on=true;JOY.bx=b.x;JOY.by=b.y;JOY.x=p.x;JOY.y=p.y;try{cv.setPointerCapture(e.pointerId)}catch(_){}return}}
+  if(joyActive()&&JOY.id===null){const b=joyBase();if(Math.hypot(p.x-b.x,p.y-b.y)<JOY.R+70){JOY.id=e.pointerId;JOY.on=true;JOY.bx=b.x;JOY.by=b.y;JOY.x=p.x;JOY.y=p.y;try{cv.setPointerCapture(e.pointerId)}catch(_){}return}}
   mouse.x=p.x;mouse.y=p.y;mouse.kind=e.pointerType;mw=toWorld(p);
   if(state!=='loading'&&inR(p,MUTE)){muted=!muted;SFX.click();return}
   if(state==='gate'){startLoading();return}
@@ -1431,7 +1444,7 @@ cv.addEventListener('pointerdown',e=>{
   if(s){if(s===stareT){if(stareAuto)autoSkip=s;stareT=null;stareTime=0;zoomK=null;stareAuto=false;SFX.click()}else if(s.cd<=0){stareT=s;stareTime=0;zoomK=null;stareAuto=false;SFX.blip();P.a=Math.atan2(s.y-P.y,s.x-P.x)}else toast('지금은 그 수험생을 볼 수 없어요 (잠깐 쉬기)','#aab');return}
   floorDown={x:p.x,y:p.y,wx:w.x,wy:w.y};dragAim=false;try{cv.setPointerCapture(e.pointerId)}catch(_){}
 });
-cv.addEventListener('pointermove',e=>{const p=toCanvas(e);if(e.pointerId===JOY.id){JOY.x=p.x;JOY.y=p.y;return}mouse.x=p.x;mouse.y=p.y;mouse.kind=e.pointerType;mw=toWorld(p);if(floorDown&&!dragAim&&Math.hypot(p.x-floorDown.x,p.y-floorDown.y)>14){dragAim=true;P.path=null}});
+cv.addEventListener('pointermove',e=>{const p=toCanvas(e);if(e.pointerId===JOY.id){JOY.x=p.x;JOY.y=p.y;const dx=p.x-JOY.bx,dy=p.y-JOY.by,d=Math.hypot(dx,dy),M=JOY.R*1.15;if(d>M){JOY.bx=p.x-dx/d*M;JOY.by=p.y-dy/d*M}return}mouse.x=p.x;mouse.y=p.y;mouse.kind=e.pointerType;mw=toWorld(p);if(floorDown&&!dragAim&&Math.hypot(p.x-floorDown.x,p.y-floorDown.y)>14){dragAim=true;P.path=null}});
 const up=e=>{if(e&&e.pointerId===JOY.id){JOY.id=null;JOY.on=false;return}mouse.down=false;if(floorDown&&!dragAim&&state==='play'&&(phase==='check'||phase==='exam')){if(stareT){if(stareAuto)autoSkip=stareT;stareT=null;stareTime=0;zoomK=null;stareAuto=false}goPath(floorDown.wx,floorDown.wy)}floorDown=null;dragAim=false};
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',e=>{if(e.pointerId===JOY.id){JOY.id=null;JOY.on=false;return}mouse.down=false;floorDown=null;dragAim=false});
 cv.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')mouse.x=-99});
