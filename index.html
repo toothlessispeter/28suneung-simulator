@@ -18,7 +18,7 @@ html,body{margin:0;height:100%;background:radial-gradient(circle at 50% 30%,#2a2
 #wrap{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:8px}
 @media (orientation:portrait){#wrap{padding:4px}.housing{padding:4px!important;border-radius:10px}}
 .housing{background:linear-gradient(#3b2f7a,#1d1848);border:3px solid #1a1a1a;border-radius:14px;padding:8px;box-shadow:0 18px 40px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.1);width:min(100%,calc((100vh - 60px)*1180/620 + 16px))}
-canvas{display:block;width:100%;aspect-ratio:1180/620;border-radius:6px;background:#000;touch-action:none;cursor:none}
+canvas{display:block;width:100%;aspect-ratio:1180/620;border-radius:6px;background:#000;touch-action:none;cursor:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='34' height='34'><line x1='19' y1='19' x2='30' y2='30' stroke='%231a1a1a' stroke-width='8' stroke-linecap='round'/><line x1='19' y1='19' x2='30' y2='30' stroke='%23b06a2a' stroke-width='4.5' stroke-linecap='round'/><circle cx='12' cy='12' r='10' fill='rgba(190,240,255,.45)' stroke='%231a1a1a' stroke-width='4'/><path d='M6 10 A7 7 0 0 1 11 5' stroke='white' stroke-width='2' fill='none'/></svg>") 12 12, crosshair}
 .help{font:16px "Gaegu",sans-serif;color:#a9a6d8;text-align:center}
 .help b{color:#dfe6f3}
 </style>
@@ -52,7 +52,27 @@ const HEADLINES=[
 
 let state='gate',lt=0,itPrev=0,pops=[],resT=0,stampDone=false,it=0,t=0,phase='',phaseT=0,seats=[],students=[],P,keys={},mouse={x:-99,y:-99,down:false,kind:'mouse',moved:0};
 let stareT=null,stareTime=0,lockT=null,lockLeft=0,msgs=[],sparks=[],leak=0,complaint=0,score=0,combo=0;
-let zoomK=null,floorDown=null,dragAim=false;
+let zoomK=null,floorDown=null,dragAim=false,mw={x:-999,y:-999},JOY={id:null,on:false,bx:0,by:0,x:0,y:0,R:62};
+const CAM={x:0,y:0,z:1,vx:0,vy:0,vw:0,vh:0};
+function camSetup(snap){
+  // 화면에서 교실이 보이는 영역(뷰포트)과 배율
+  if(PORT){CAM.vx=0;CAM.vy=132;CAM.vw=W;CAM.vh=816;CAM.z=1.05}
+  else{CAM.vx=0;CAM.vy=0;CAM.vw=SB;CAM.vh=H;const ww=ROOM.x1+30,wh=ROOM.y1+18;CAM.z=Math.min(CAM.vw/ww,CAM.vh/wh)}
+  camFollow(snap?1:0);
+}
+function camFollow(k){
+  const ww=ROOM.x1+30,wh=ROOM.y1+18,vw=CAM.vw/CAM.z,vh=CAM.vh/CAM.z;
+  let tx,ty;
+  if(!PORT){tx=-(vw-ww)/2;ty=-(vh-wh)/2}
+  else{const px=P?P.x:ww/2,py=P?P.y:0;tx=clamp(px-vw/2,0,Math.max(0,ww-vw));ty=clamp(py-vh*.42,0,Math.max(0,wh-vh))}
+  CAM.x+=(tx-CAM.x)*k;CAM.y+=(ty-CAM.y)*k;
+}
+const toWorld=p=>({x:(p.x-CAM.vx)/CAM.z+CAM.x,y:(p.y-CAM.vy)/CAM.z+CAM.y});
+const toScreen=(x,y)=>({x:(x-CAM.x)*CAM.z+CAM.vx,y:(y-CAM.y)*CAM.z+CAM.vy});
+const inView=p=>p.x>CAM.vx&&p.x<CAM.vx+CAM.vw&&p.y>CAM.vy&&p.y<CAM.vy+CAM.vh;
+const camC=()=>({x:CAM.x+CAM.vw/CAM.z/2,y:CAM.y+CAM.vh/CAM.z*.45});
+const MINI=()=>PORT?{x:W-152,y:CAM.vy+10,w:142,h:Math.round(142*(ROOM.y1+18)/(ROOM.x1+30))}:null;
+const joyActive=()=>PORT&&state==='play'&&(phase==='check'||phase==='exam');
 let stats,evT=0,evDone=false,flash=0,failReason='',shake=0,cview='desk',TABS=[],roundTypes=[];
 const CHEATS=['glass','swap','phone','btncam','pencam'];
 const DIFF={
@@ -112,15 +132,15 @@ function setup(){
       awk:0,cd:0,bubble:null,bT:0,caught:false,fade:1,ring:0,inspected:false,late:false,bellCaught:false,
       rx:10,ry:-20,lx:-10,ly:-20,label:`${st.r+1}분단 ${st.c+1}번`};
   });
-  P={x:(ROOM.x0+ROOM.x1)/2,y:PORT?240:118,a:Math.PI/2,tx:null,ty:null,r:14,walk:0};
-  leak=0;complaint=0;score=0;combo=0;msgs=[];sparks=[];stareT=null;lockT=null;stareTime=0;zoomK=null;floorDown=null;dragAim=false;
+  P={x:(ROOM.x0+ROOM.x1)/2,y:ROOM.y0+52,a:Math.PI/2,tx:null,ty:null,r:14,walk:0,path:null};camSetup(true);
+  leak=0;complaint=0;score=0;combo=0;msgs=[];sparks=[];stareT=null;lockT=null;stareTime=0;zoomK=null;floorDown=null;dragAim=false;JOY.id=null;JOY.on=false;
   stats={caught:0,wrong:0,noEv:0,checkCatch:0,inAct:0,bell:0,bellWrong:0};
   evDone=false;evT=rand(.3,.62)*D.exam;failReason='';
   phase='check';phaseT=D.check;state='play';cview='desk';pops=[];SFX.start();
   toast('입실 검사: 안경 쓴 수험생을 눌러 책상 위 안경을 확인하세요','#ffd84a');
 }
 function startExam(){
-  phase='exam';phaseT=D.exam;stareT=null;lockT=null;cview='face';SFX.start();pop('시험 시작!',RW()/2,PORT?560:320,'#ffe14a',48);
+  phase='exam';phaseT=D.exam;stareT=null;lockT=null;cview='face';SFX.start();{const c=camC();pop('시험 시작!',c.x,c.y,'#ffe14a',48)}
   for(const s of students){s.state='write';s.anim='write';s.tm=rand(.5,3);s.next=rand(3,8)}
   toast('1교시 국어 시작','#ffd84a');
 }
@@ -129,7 +149,7 @@ function startBell(){
   const alive=students.filter(s=>!s.caught);
   const normals=alive.filter(s=>!s.cheat).sort(()=>Math.random()-.5).slice(0,Math.floor(rand(1,3)));
   for(const s of alive){if(s.state==='act')endAct(s);s.late=normals.includes(s)||(s.cheat&&Math.random()<.6);s.anim=s.late?'write':'down';s.state=s.anim}
-  toast('종료령! 아직 펜이 움직이는 수험생을 클릭!','#ff6b6b');shake=.3;SFX.bell();pop('종료령!',RW()/2,PORT?560:320,'#ff5a5a',56);
+  toast('종료령! 아직 펜이 움직이는 수험생을 클릭!','#ff6b6b');shake=.3;SFX.bell();{const c=camC();pop('종료령!',c.x,c.y,'#ff5a5a',56)}
 }
 function finish(reason){
   if(reason)failReason=reason;
@@ -293,10 +313,11 @@ function update(dt){
   // 이동
   let vx=0,vy=0;
   if(keys.KeyW||keys.ArrowUp)vy=-1;if(keys.KeyS||keys.ArrowDown)vy=1;if(keys.KeyA||keys.ArrowLeft)vx=-1;if(keys.KeyD||keys.ArrowRight)vx=1;
+  if(!vx&&!vy&&JOY.on){const jx=(JOY.x-JOY.bx)/JOY.R,jy=(JOY.y-JOY.by)/JOY.R,m=Math.hypot(jx,jy);if(m>.18){const mm=Math.min(1,m);vx=jx/m*mm;vy=jy/m*mm}}
   if(vx||vy){P.tx=null;P.path=null}
   else if(P.path&&P.path.length){const q=P.path[0],dx=q[0]-P.x,dy=q[1]-P.y,d=Math.hypot(dx,dy);if(d<5){P.path.shift();if(P.path.length){const q2=P.path[0],d2=Math.hypot(q2[0]-P.x,q2[1]-P.y)||1;vx=(q2[0]-P.x)/d2;vy=(q2[1]-P.y)/d2}}else{vx=dx/d;vy=dy/d}}
   const n=Math.hypot(vx,vy);
-  if(n){const sp=210*dt,ox=P.x,oy=P.y;const nx=P.x+vx/n*sp,ny=P.y+vy/n*sp;if(!blocked(nx,P.y))P.x=nx;if(!blocked(P.x,ny))P.y=ny;if(P.x===ox&&P.y===oy){P.tx=null;P.path=null}else P.walk+=dt*10}
+  if(n){const sp=240*dt*Math.min(1,n),ox=P.x,oy=P.y;const nx=P.x+vx/n*sp,ny=P.y+vy/n*sp;if(!blocked(nx,P.y))P.x=nx;if(!blocked(P.x,ny))P.y=ny;if(P.x===ox&&P.y===oy){P.tx=null;P.path=null}else P.walk+=dt*10}
   // 쳐다보기
   if(phase==='check'||phase==='exam'){
     if(stareT&&(stareT.caught||stareT.cd>0)){stareT=null;stareTime=0;zoomK=null}
@@ -310,9 +331,11 @@ function update(dt){
   // 시선 방향
   let ta=P.a;
   if(stareT)ta=Math.atan2(stareT.y-P.y,stareT.x-P.x);
-  else if(dragAim||(mouse.kind==='mouse'&&inRoom(mouse)))ta=Math.atan2(mouse.y-P.y,mouse.x-P.x);
+  else if(n&&(JOY.on||mouse.kind!=='mouse'))ta=Math.atan2(vy,vx);
+  else if(dragAim||(mouse.kind==='mouse'&&inView(mouse)))ta=Math.atan2(mw.y-P.y,mw.x-P.x);
   else if(n)ta=Math.atan2(vy,vx);
-  let da=ta-P.a;while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;P.a+=da*Math.min(1,dt*14);
+  let da=ta-P.a;while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;P.a+=da*Math.min(1,dt*24);
+  camFollow(Math.min(1,dt*8));if(mouse.kind==='mouse')mw=toWorld(mouse);
   for(const s of students)updStudent(s,dt);
   phaseT-=dt;
   if(phase==='check'&&phaseT<=0)startExam();
@@ -414,8 +437,8 @@ const CUES=[[.05,'news'],[2.6,'news'],[5.2,'news'],[7.8,'news'],[10.4,'whoosh'],
 
 /* ---------- 그리기: 교실 ---------- */
 function drawRoom(){
-  ctx.fillStyle='#8fd3bd';ctx.fillRect(0,0,RW(),H);
-  ctx.fillStyle='rgba(255,255,255,.22)';for(let x=0;x<RW();x+=28)ctx.fillRect(x,0,14,ROOM.y0);
+  ctx.fillStyle='#8fd3bd';ctx.fillRect(-600,-600,ROOM.x1+1300,ROOM.y1+1300);
+  ctx.fillStyle='rgba(255,255,255,.22)';for(let x=-600;x<ROOM.x1+700;x+=28)ctx.fillRect(x,-600,14,ROOM.y0+600);
   const rcx=(ROOM.x0+ROOM.x1)/2,by=ROOM.y0-52;
   const fx=ROOM.x0,fy=ROOM.y0,fw=ROOM.x1-ROOM.x0,fh=ROOM.y1-ROOM.y0;
   ctx.fillStyle='#f2cf8c';ctx.fillRect(fx,fy,fw,fh);
@@ -482,7 +505,7 @@ function drawProctor(){
   boilOn=_bo;
 }
 function bubble(text,x,y){
-  ctx.font=`15px ${FJ}`;const w=ctx.measureText(text).width+22,bx=clamp(x-w/2,ROOM.x0+4,RW()-w-8);
+  ctx.font=`15px ${FJ}`;const w=ctx.measureText(text).width+22,bx=clamp(x-w/2,ROOM.x0+4,ROOM.x1-w-4);
   ctx.fillStyle='#fff';rr(ctx,bx,y-30,w,27,12);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.stroke();
   ctx.beginPath();ctx.moveTo(x-7,y-5);ctx.lineTo(x+7,y-5);ctx.lineTo(x,y+7);ctx.closePath();ctx.fill();
   ctx.beginPath();ctx.moveTo(x-6,y-3.5);ctx.lineTo(x,y+7);ctx.lineTo(x+6,y-3.5);ctx.stroke();
@@ -1139,10 +1162,34 @@ function drawResult(){
     otext(GRADE_NAME[grade],px+pw-190,py+62,18,'#e8262a',{align:'right',lw:4,stroke:'#fff'})}
 }
 function drawCursor(){
+  return; // 커서는 CSS(하드웨어 커서)로 그려서 지연이 없게
   if(mouse.kind!=='mouse'||mouse.x<0)return;
   ctx.save();ctx.translate(mouse.x,mouse.y);
   ctx.lineCap='round';ctx.strokeStyle=INK;ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(8,8);ctx.lineTo(18,18);ctx.stroke();ctx.strokeStyle='#b06a2a';ctx.lineWidth=4;ctx.stroke();
   ctx.fillStyle='rgba(190,240,255,.35)';ctx.beginPath();ctx.arc(0,0,10,0,7);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=4;ctx.stroke();ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(0,0,7.5,3.6,4.8);ctx.stroke();
+  ctx.restore();
+}
+function drawMini(){
+  const m=MINI(),sx=m.w/(ROOM.x1+30),sy=m.h/(ROOM.y1+18);
+  ctx.save();ctx.globalAlpha=.88;ctx.fillStyle='#1d1848';rr(ctx,m.x-4,m.y-4,m.w+8,m.h+8,8);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=3;ctx.stroke();
+  ctx.fillStyle='#f2cf8c';ctx.fillRect(m.x+ROOM.x0*sx,m.y+ROOM.y0*sy,(ROOM.x1-ROOM.x0)*sx,(ROOM.y1-ROOM.y0)*sy);
+  ctx.fillStyle='#c98a42';for(const st of seats)ctx.fillRect(m.x+(st.dx-36)*sx,m.y+(st.dy-20)*sy,72*sx,40*sy);
+  for(const s of students){if(s.caught)continue;ctx.fillStyle=s===stareT?'#ffe14a':'#3a3a52';ctx.beginPath();ctx.arc(m.x+s.x*sx,m.y+s.y*sy,s===stareT?3.5:2.2,0,7);ctx.fill()}
+  ctx.fillStyle='rgba(255,236,80,.55)';ctx.beginPath();ctx.moveTo(m.x+P.x*sx,m.y+P.y*sy);ctx.arc(m.x+P.x*sx,m.y+P.y*sy,480*sx,P.a-.6,P.a+.6);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#2f7de1';ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(m.x+P.x*sx,m.y+P.y*sy,4,0,7);ctx.fill();ctx.stroke();
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.strokeRect(m.x+CAM.x*sx,m.y+CAM.y*sy,CAM.vw/CAM.z*sx,CAM.vh/CAM.z*sy);
+  ctx.restore();
+}
+function joyBase(){return{x:CAM.vx+104,y:CAM.vy+CAM.vh-104}}
+function drawJoy(){
+  const b=JOY.on?{x:JOY.bx,y:JOY.by}:joyBase();
+  ctx.save();ctx.globalAlpha=JOY.on?.85:.55;
+  ctx.fillStyle='rgba(29,24,72,.45)';ctx.beginPath();ctx.arc(b.x,b.y,JOY.R+10,0,7);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=4;ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=2;ctx.setLineDash([6,6]);ctx.beginPath();ctx.arc(b.x,b.y,JOY.R-6,0,7);ctx.stroke();ctx.setLineDash([]);
+  let kx=b.x,ky=b.y;if(JOY.on){const dx=JOY.x-JOY.bx,dy=JOY.y-JOY.by,d=Math.hypot(dx,dy),k=d>JOY.R?JOY.R/d:1;kx=b.x+dx*k;ky=b.y+dy*k}
+  const g=ctx.createRadialGradient(kx-8,ky-8,4,kx,ky,30);g.addColorStop(0,'#ffe98a');g.addColorStop(1,'#e2a52a');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(kx,ky,30,0,7);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=4;ctx.stroke();
+  if(!JOY.on){ctx.globalAlpha=.9;ctx.fillStyle='#fff';ctx.font=`16px ${FJ}`;ctx.textAlign='center';ctx.fillText('이동',b.x,b.y+6)}
   ctx.restore();
 }
 function drawHazard(y,h){
@@ -1157,8 +1204,8 @@ const RW=()=>PORT?W:SB;
 const inRoom=p=>PORT?(p.y>ROOM.y0-60&&p.y<ROOM.y1+6):(p.x>0&&p.x<SB);
 function applyLayout(){
   const port=innerHeight>innerWidth*1.05,changed=port!==PORT||!applied;PORT=port;applied=true;
-  if(PORT){W=720;H=1280;SB=720;ROOM={x0:20,y0:190,x1:700,y1:945};COLS=[88,224,360,496,632];ROWS=[290,425,560,695,830]}
-  else{W=1180;H=620;SB=915;ROOM={x0:30,y0:60,x1:900,y1:605};COLS=[140,295,450,605,760];ROWS=[160,248,336,424,512]}
+  if(PORT){W=720;H=1280;SB=720;ROOM={x0:20,y0:70,x1:1000,y1:1065};COLS=[125,310,495,680,865];ROWS=[195,375,555,735,915]}
+  else{W=1180;H=620;SB=915;ROOM={x0:30,y0:70,x1:1110,y1:775};COLS=[150,370,590,810,1030];ROWS=[180,310,440,570,700]}
   if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H}
   MUTE.x=W-48;
   cv.style.aspectRatio=`${W}/${H}`;
@@ -1168,8 +1215,9 @@ function applyLayout(){
   if(changed&&seats.length){
     for(const s of seats){s.dx=COLS[s.c];s.dy=ROWS[s.r];s.x0=s.dx-38;s.y0=s.dy-24;s.x1=s.dx+38;s.y1=s.dy+60}
     for(const s of students){s.x=s.seat.dx;s.y=s.seat.dy+38}
-    if(P){P.x=(ROOM.x0+ROOM.x1)/2;P.y=PORT?240:118;P.tx=null}
+    if(P){P.x=(ROOM.x0+ROOM.x1)/2;P.y=ROOM.y0+52;P.tx=null;P.path=null}
   }
+  camSetup(true);
 }
 function drawHudPortrait(){
   const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#4a35a0');g.addColorStop(1,'#1d1848');
@@ -1317,6 +1365,7 @@ function draw(){
     ctx.restore();drawMute();drawCursor();return}
   if(state==='select'){drawSelect();ctx.restore();drawMute();drawCursor();return}
   if(state==='how'){drawIntro();ctx.restore();drawHow();drawMute();drawCursor();return}
+  ctx.save();ctx.beginPath();ctx.rect(CAM.vx,CAM.vy,CAM.vw,CAM.vh);ctx.clip();ctx.translate(CAM.vx,CAM.vy);ctx.scale(CAM.z,CAM.z);ctx.translate(-CAM.x,-CAM.y);
   drawRoom();
   for(const st of seats)drawDesk(st);
   drawProctor();
@@ -1325,15 +1374,18 @@ function draw(){
     for(const[cl,lw]of[[INK,9],['#ff5fb0',5],['#fff',1.8]]){ctx.strokeStyle=cl;ctx.lineWidth=lw;ctx.lineJoin='round';ctx.beginPath();ctx.moveTo(hx,hy);
       for(let i=1;i<n;i++){const k=i/n,px=hx+(tx-hx)*k,py=hy+(ty-hy)*k,nx=-(ty-hy),ny=tx-hx,L=Math.hypot(nx,ny)||1,o=(i%2?1:-1)*9;ctx.lineTo(px+nx/L*o,py+ny/L*o)}ctx.lineTo(tx,ty);ctx.stroke()}
     star(tx,ty,14,'#ffe14a')}
-  const hv=state==='play'&&!stareT&&mouse.kind==='mouse'?hitStudent(mouse.x,mouse.y):null;
+  const hv=state==='play'&&!stareT&&mouse.kind==='mouse'&&inView(mouse)?hitStudent(mw.x,mw.y):null;
   for(const s of[lockT,stareT]){if(!s)continue;ctx.setLineDash(s===stareT?[]:[7,6]);ctx.strokeStyle=INK;ctx.lineWidth=6;rr(ctx,s.seat.x0+2,s.seat.y0+2,72,80,10);ctx.stroke();ctx.strokeStyle='#ffe14a';ctx.lineWidth=3;ctx.stroke();ctx.setLineDash([])}
   if(hv){const ay=hv.seat.y0-6+Math.sin(t*8)*4;ctx.beginPath();ctx.moveTo(hv.x-10,ay-14);ctx.lineTo(hv.x+10,ay-14);ctx.lineTo(hv.x,ay);ctx.closePath();ctx.fillStyle='#ffe14a';ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.stroke()}
   for(const s of students)if(s.bubble)bubble(s.bubble,s.x,s.y-30);
   for(const s of students)if(s.caught&&s.fade>0){ctx.save();ctx.globalAlpha=s.fade;ctx.translate(s.x,s.y);ctx.rotate(-.15);otext('퇴실!',0,6,22,'#ff3b3b',{font:FT,lw:5});ctx.restore()}
   for(const s of sparks){ctx.globalAlpha=Math.min(1,s.t/.5);star(s.x,s.y,7,s.c)}ctx.globalAlpha=1;
   for(const p of pops){const a=1.1-p.t,sc=a<.15?.4+a/.15*.85:a<.3?1.25-(a-.15)/.15*.25:1;ctx.save();ctx.globalAlpha=Math.min(1,p.t*2.5);ctx.translate(p.x,p.y-a*36);ctx.scale(sc,sc);otext(p.text,0,0,p.size,p.col,{font:FT,lw:p.size/4.5});ctx.restore()}
-  if(flash>0){ctx.fillStyle=`rgba(255,40,40,${.2*Math.abs(Math.sin(flash*10))})`;const fy=PORT?ROOM.y0+10:84;ctx.fillRect(0,0,RW(),H);drawHazard(fy,14);drawHazard(fy+62,14);ctx.fillStyle='#e8262a';ctx.fillRect(0,fy+14,RW(),48);otext('위급재난문자 발송!',RW()/2,fy+49,30,'#fff',{font:FT,lw:6})}
-  let ty=(PORT?ROOM.y0+40:150)+(flash>0?46:0);for(const m of msgs){const a=2.2-m.t,sc=a<.18?easeBack(a/.18):1;ctx.save();ctx.globalAlpha=Math.min(1,m.t*2);ctx.translate(RW()/2,ty);ctx.scale(sc,sc);otext(m.text,0,0,PORT?24:21,m.col,{lw:5});ctx.restore();ty+=32}
+  ctx.restore();
+  if(PORT&&state==='play')drawMini();
+  if(joyActive())drawJoy();
+  if(flash>0){ctx.fillStyle=`rgba(255,40,40,${.2*Math.abs(Math.sin(flash*10))})`;const fy=PORT?CAM.vy+10:84;ctx.fillRect(0,0,RW(),H);drawHazard(fy,14);drawHazard(fy+62,14);ctx.fillStyle='#e8262a';ctx.fillRect(0,fy+14,RW(),48);otext('위급재난문자 발송!',RW()/2,fy+49,30,'#fff',{font:FT,lw:6})}
+  let ty=(PORT?CAM.vy+40:150)+(flash>0?46:0);for(const m of msgs){const a=2.2-m.t,sc=a<.18?easeBack(a/.18):1;ctx.save();ctx.globalAlpha=Math.min(1,m.t*2);ctx.translate(RW()/2,ty);ctx.scale(sc,sc);otext(m.text,0,0,PORT?24:21,m.col,{lw:5});ctx.restore();ty+=32}
   ctx.restore();
   if(state==='play'||state==='result')(PORT?drawHudPortrait:drawSidebar)();
   if(state==='result')drawResult();
@@ -1346,7 +1398,9 @@ function toCanvas(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.le
 function skipIntro(p){if(it<18){it=17.99;itPrev=17.98}else if(it>18.6){if(!p||inR(p,TITLEBTN)){SFX.click();state='select'}else if(inR(p,HOWBTN)){SFX.click();state='how'}}}
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('pointerdown',e=>{
-  e.preventDefault();ac();const p=toCanvas(e);mouse.x=p.x;mouse.y=p.y;mouse.kind=e.pointerType;
+  e.preventDefault();ac();const p=toCanvas(e);
+  if(joyActive()&&JOY.id===null){const b=joyBase();if(Math.hypot(p.x-b.x,p.y-b.y)<JOY.R+34){JOY.id=e.pointerId;JOY.on=true;JOY.bx=b.x;JOY.by=b.y;JOY.x=p.x;JOY.y=p.y;try{cv.setPointerCapture(e.pointerId)}catch(_){}return}}
+  mouse.x=p.x;mouse.y=p.y;mouse.kind=e.pointerType;mw=toWorld(p);
   if(state!=='loading'&&inR(p,MUTE)){muted=!muted;SFX.click();return}
   if(state==='gate'){startLoading();return}
   if(state==='loading'){startFromLoading();return}
@@ -1358,17 +1412,18 @@ cv.addEventListener('pointerdown',e=>{
   for(const r of TABS)if(inR(p,r)){zoomK=zoomK===r.k?null:r.k;SFX.click();return}
   if(inR(p,BTN)){tryCatch();return}
   if(inR(p,STARTBTN)){SFX.click();startExam();return}
-  if(!inRoom(p))return;
-  const s=hitStudent(p.x,p.y);
+  {const m=PORT&&state==='play'?MINI():null;if(m&&inR(p,m)&&(phase==='check'||phase==='exam')){goPath((p.x-m.x)/(m.w/(ROOM.x1+30)),(p.y-m.y)/(m.h/(ROOM.y1+18)));SFX.click();return}}
+  if(!inView(p))return;
+  const w=toWorld(p),s=hitStudent(w.x,w.y);
   if(phase==='bell'){bellCatch(s);return}
   if(e.button===2){if(s)tryCatch(s);return}
   if(s&&s.talk>0&&(phase==='exam'||phase==='check')){glare(s);return}
   if(s){if(s===stareT){stareT=null;stareTime=0;zoomK=null;SFX.click()}else if(s.cd<=0){stareT=s;stareTime=0;zoomK=null;SFX.blip();P.a=Math.atan2(s.y-P.y,s.x-P.x)}else toast('지금은 그 수험생을 볼 수 없어요 (잠깐 쉬기)','#aab');return}
-  floorDown={x:p.x,y:p.y};dragAim=false;try{cv.setPointerCapture(e.pointerId)}catch(_){}
+  floorDown={x:p.x,y:p.y,wx:w.x,wy:w.y};dragAim=false;try{cv.setPointerCapture(e.pointerId)}catch(_){}
 });
-cv.addEventListener('pointermove',e=>{const p=toCanvas(e);mouse.x=p.x;mouse.y=p.y;mouse.kind=e.pointerType;if(floorDown&&!dragAim&&Math.hypot(p.x-floorDown.x,p.y-floorDown.y)>14){dragAim=true;P.path=null}});
-const up=()=>{mouse.down=false;if(floorDown&&!dragAim&&state==='play'&&(phase==='check'||phase==='exam')){if(stareT){stareT=null;stareTime=0;zoomK=null}goPath(floorDown.x,floorDown.y)}floorDown=null;dragAim=false};
-cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',()=>{mouse.down=false;floorDown=null;dragAim=false});
+cv.addEventListener('pointermove',e=>{const p=toCanvas(e);if(e.pointerId===JOY.id){JOY.x=p.x;JOY.y=p.y;return}mouse.x=p.x;mouse.y=p.y;mouse.kind=e.pointerType;mw=toWorld(p);if(floorDown&&!dragAim&&Math.hypot(p.x-floorDown.x,p.y-floorDown.y)>14){dragAim=true;P.path=null}});
+const up=e=>{if(e&&e.pointerId===JOY.id){JOY.id=null;JOY.on=false;return}mouse.down=false;if(floorDown&&!dragAim&&state==='play'&&(phase==='check'||phase==='exam')){if(stareT){stareT=null;stareTime=0;zoomK=null}goPath(floorDown.wx,floorDown.wy)}floorDown=null;dragAim=false};
+cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',e=>{if(e.pointerId===JOY.id){JOY.id=null;JOY.on=false;return}mouse.down=false;floorDown=null;dragAim=false});
 cv.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')mouse.x=-99});
 addEventListener('keydown',e=>{
   if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
