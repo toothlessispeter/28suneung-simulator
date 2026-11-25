@@ -45,7 +45,7 @@ git clone https://github.com/toothlessispeter/28suneung-simulator.git
 
 ## 스튜디오
 **인간시대의 끝이 도래했다.** — 2000년대 플래시게임 감성 인디 스튜디오, made by 박지훈
-유튜브 · 인스타그램 · 틱톡 `@ingansidae.end`
+유튜브 [@ingansidae_end](https://www.youtube.com/@ingansidae_end) · 인스타그램 · 틱톡 `@ingansidae_end`
 
 스튜디오 공통 규칙은 [STUDIO_CONTEXT.md](STUDIO_CONTEXT.md)에 있어요.
 
