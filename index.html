@@ -26,7 +26,7 @@ canvas{display:block;width:100%;aspect-ratio:1180/620;border-radius:6px;backgrou
 <body>
 <div id="wrap">
   <div class="housing"><canvas id="c" width="1180" height="620"></canvas></div>
-  <div class="help"><b>M</b> = 소리 끄기 · <b>B</b> = 배경음악 끄기 · <b>마우스 방향</b> = 시선 · 통로 <b>클릭</b> 또는 <b>WASD</b> = 이동 · 수험생 <b>꾹 누르기</b> = 확대 관찰 · <b>적발</b> 버튼 / <b>E</b> / <b>우클릭</b> = 적발</div>
+  <div class="help"><b>M</b> = 소리 끄기 · <b>B</b> = 배경음악 끄기 · <b>마우스</b> = 시선 · 바닥 <b>클릭</b>/<b>WASD</b> = 이동 · 수험생 <b>클릭</b> = 관찰 · <b>적발!</b> 버튼 / <b>E</b> / <b>스페이스</b> / <b>우클릭</b> = 적발 · <b>Esc</b> = 그만 보기</div>
 </div>
 <script>
 {
@@ -52,6 +52,7 @@ const HEADLINES=[
 
 let state='gate',lt=0,itPrev=0,pops=[],resT=0,stampDone=false,it=0,t=0,phase='',phaseT=0,seats=[],students=[],P,keys={},mouse={x:-99,y:-99,down:false,kind:'mouse',moved:0};
 let stareT=null,stareTime=0,lockT=null,lockLeft=0,msgs=[],sparks=[],leak=0,complaint=0,score=0,combo=0;
+let zoomK=null,floorDown=null,dragAim=false;
 let stats,evT=0,evDone=false,flash=0,failReason='',shake=0,cview='desk',TABS=[],roundTypes=[];
 const CHEATS=['glass','swap','phone','btncam','pencam'];
 const DIFF={
@@ -112,7 +113,7 @@ function setup(){
       rx:10,ry:-20,lx:-10,ly:-20,label:`${st.r+1}분단 ${st.c+1}번`};
   });
   P={x:(ROOM.x0+ROOM.x1)/2,y:PORT?240:118,a:Math.PI/2,tx:null,ty:null,r:14,walk:0};
-  leak=0;complaint=0;score=0;combo=0;msgs=[];sparks=[];stareT=null;lockT=null;stareTime=0;
+  leak=0;complaint=0;score=0;combo=0;msgs=[];sparks=[];stareT=null;lockT=null;stareTime=0;zoomK=null;floorDown=null;dragAim=false;
   stats={caught:0,wrong:0,noEv:0,checkCatch:0,inAct:0,bell:0,bellWrong:0};
   evDone=false;evT=rand(.3,.62)*D.exam;failReason='';
   phase='check';phaseT=D.check;state='play';cview='desk';pops=[];SFX.start();
@@ -157,7 +158,7 @@ function evidence(s){
 }
 function tryCatch(s){
   s=s||stareT||lockT;
-  if(!s||s.caught){toast('먼저 수험생을 눌러서 관찰하세요','#aab');return}
+  if(!s||s.caught){toast('먼저 수험생을 탭해서 관찰하세요','#aab');return}
   if(phase!=='check'&&phase!=='exam')return;
   const ev=evidence(s);
   if(s.cheat&&ev){
@@ -251,6 +252,26 @@ function blocked(x,y){
   for(const s of seats)if(x>s.x0-P.r&&x<s.x1+P.r&&y>s.y0-P.r&&y<s.y1+P.r)return true;
   return false;
 }
+/* ---------- 길찾기: 탭한 곳까지 책상을 돌아서 걸어가기 ---------- */
+function goPath(tx,ty){
+  const G=16,x0=ROOM.x0,y0=ROOM.y0,C=Math.ceil((ROOM.x1-x0)/G),Rn=Math.ceil((ROOM.y1-y0)/G);
+  const cx=i=>x0+i*G+G/2,cy=j=>y0+j*G+G/2,free=(i,j)=>i>=0&&j>=0&&i<C&&j<Rn&&!blocked(cx(i),cy(j));
+  const cell=(x,y)=>[clamp(Math.floor((x-x0)/G),0,C-1),clamp(Math.floor((y-y0)/G),0,Rn-1)];
+  const near=(i,j)=>{if(free(i,j))return[i,j];for(let r=1;r<12;r++)for(let a=-r;a<=r;a++)for(const[di,dj]of[[a,-r],[a,r],[-r,a],[r,a]])if(free(i+di,j+dj))return[i+di,j+dj];return null};
+  const S=near(...cell(P.x,P.y)),T=near(...cell(tx,ty));if(!S||!T){P.path=null;return}
+  if(!blocked(tx,ty)){}else{tx=cx(T[0]);ty=cy(T[1])}
+  const key=(i,j)=>j*C+i,prev=new Map([[key(...S),-1]]),q=[S];let found=false;
+  const D8=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+  for(let h=0;h<q.length;h++){const[i,j]=q[h];if(i===T[0]&&j===T[1]){found=true;break}
+    for(const[di,dj]of D8){const ni=i+di,nj=j+dj;if(!free(ni,nj)||prev.has(key(ni,nj)))continue;if(di&&dj&&(!free(i+di,j)||!free(i,j+dj)))continue;prev.set(key(ni,nj),key(i,j));q.push([ni,nj])}}
+  if(!found){P.path=null;return}
+  const pts=[];for(let k=key(...T);k!==-1;k=prev.get(k))pts.unshift([cx(k%C),cy(Math.floor(k/C))]);
+  pts[pts.length-1]=[tx,ty];
+  const clear=(a,b)=>{const d=Math.hypot(b[0]-a[0],b[1]-a[1]),n=Math.ceil(d/6);for(let k=1;k<=n;k++){const x=a[0]+(b[0]-a[0])*k/n,y=a[1]+(b[1]-a[1])*k/n;if(blocked(x,y))return false}return true};
+  const out=[];let cur=[P.x,P.y],i=0;
+  while(i<pts.length){let j=pts.length-1;while(j>i&&!clear(cur,pts[j]))j--;out.push(pts[j]);cur=pts[j];i=j+1}
+  P.path=out;P.tx=tx;P.ty=ty;
+}
 function update(dt){
   t+=dt;
   for(const m of msgs)m.t-=dt;msgs=msgs.filter(m=>m.t>0);
@@ -272,26 +293,24 @@ function update(dt){
   // 이동
   let vx=0,vy=0;
   if(keys.KeyW||keys.ArrowUp)vy=-1;if(keys.KeyS||keys.ArrowDown)vy=1;if(keys.KeyA||keys.ArrowLeft)vx=-1;if(keys.KeyD||keys.ArrowRight)vx=1;
-  if(vx||vy)P.tx=null;
-  else if(P.tx!==null){const dx=P.tx-P.x,dy=P.ty-P.y,d=Math.hypot(dx,dy);if(d<4)P.tx=null;else{vx=dx/d;vy=dy/d}}
+  if(vx||vy){P.tx=null;P.path=null}
+  else if(P.path&&P.path.length){const q=P.path[0],dx=q[0]-P.x,dy=q[1]-P.y,d=Math.hypot(dx,dy);if(d<5){P.path.shift();if(P.path.length){const q2=P.path[0],d2=Math.hypot(q2[0]-P.x,q2[1]-P.y)||1;vx=(q2[0]-P.x)/d2;vy=(q2[1]-P.y)/d2}}else{vx=dx/d;vy=dy/d}}
   const n=Math.hypot(vx,vy);
-  if(n){const sp=210*dt,ox=P.x,oy=P.y;const nx=P.x+vx/n*sp,ny=P.y+vy/n*sp;if(!blocked(nx,P.y))P.x=nx;if(!blocked(P.x,ny))P.y=ny;if(P.x===ox&&P.y===oy)P.tx=null;else P.walk+=dt*10}
+  if(n){const sp=210*dt,ox=P.x,oy=P.y;const nx=P.x+vx/n*sp,ny=P.y+vy/n*sp;if(!blocked(nx,P.y))P.x=nx;if(!blocked(P.x,ny))P.y=ny;if(P.x===ox&&P.y===oy){P.tx=null;P.path=null}else P.walk+=dt*10}
   // 쳐다보기
   if(phase==='check'||phase==='exam'){
-    let want=null;
-    if(mouse.down)want=hitStudent(mouse.x,mouse.y)||(stareT&&!stareT.caught?stareT:null);
-    if(want&&(want.cd>0||want.caught))want=null;
-    if(want!==stareT){if(stareT&&!want){lockT=stareT;lockLeft=1.8}stareT=want;stareTime=0}
+    if(stareT&&(stareT.caught||stareT.cd>0)){stareT=null;stareTime=0;zoomK=null}
+    lockT=null;
     if(stareT){
-      lockT=null;stareTime+=dt;
+      stareTime+=dt;
       if(phase==='check')stareT.inspected=stareTime>.8||stareT.inspected;
-      else{stareT.awk+=dt*.34;if(stareT.awk>=1){complaint+=10;combo=0;say(stareT,pick(['왜 계속 보세요?','집중이 안 돼요…','아 진짜 왜요?']));stareT.talk=2.6;stareT.cd=4;stareT.awk=0;toast('너무 오래 봤어요! 항의 +10','#ff8a65');SFX.boing();pop('항의!',stareT.x,stareT.y-44,'#ff8a3a',30);lockT=null;stareT=null;stareTime=0}}
-    }else if(lockT){lockLeft-=dt;if(lockLeft<=0||lockT.caught)lockT=null}
+      else{stareT.awk+=dt*.3;if(stareT.awk>=1){complaint+=10;combo=0;say(stareT,pick(['왜 계속 보세요?','집중이 안 돼요…','아 진짜 왜요?']));stareT.talk=2.6;stareT.cd=4;stareT.awk=0;toast('너무 오래 봤어요! 항의 +10','#ff8a65');SFX.boing();pop('항의!',stareT.x,stareT.y-44,'#ff8a3a',30);lockT=null;stareT=null;stareTime=0}}
+    }
   }
   // 시선 방향
   let ta=P.a;
   if(stareT)ta=Math.atan2(stareT.y-P.y,stareT.x-P.x);
-  else if(mouse.kind==='mouse'&&inRoom(mouse))ta=Math.atan2(mouse.y-P.y,mouse.x-P.x);
+  else if(dragAim||(mouse.kind==='mouse'&&inRoom(mouse)))ta=Math.atan2(mouse.y-P.y,mouse.x-P.x);
   else if(n)ta=Math.atan2(vy,vx);
   let da=ta-P.a;while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;P.a+=da*Math.min(1,dt*14);
   for(const s of students)updStudent(s,dt);
@@ -660,6 +679,18 @@ function drawMute(){
   if(muted){ctx.moveTo(cx+9,cy-5);ctx.lineTo(cx+17,cy+5);ctx.moveTo(cx+17,cy-5);ctx.lineTo(cx+9,cy+5)}else{ctx.arc(cx+5,cy,6,-.8,.8);ctx.moveTo(cx+5+Math.cos(-.8)*11,cy+Math.sin(-.8)*11);ctx.arc(cx+5,cy,11,-.8,.8)}
   ctx.stroke();
 }
+const CV_LABEL={desk:'책상 위 안경',face:'얼굴',body:'상체',hands:'손'};
+function closeView(k,s){if(k==='desk')drawDeskGlasses(octx,s);else if(k==='body')drawBody(octx,s);else if(k==='hands')drawHands(octx,s);else drawFace(octx,s)}
+function drawPanelView(k,s,x,y,w,h,f,hot,clickable){
+  closeView(k,s);
+  ctx.fillStyle=INK;rr(ctx,x-3,y-3,w+6,h+6,7);ctx.fill();
+  if(f<1){const res=Math.max(8,Math.round(240*(.05+.95*f*f)));tiny.width=res;tiny.height=Math.max(6,Math.round(res*.75));tctx.drawImage(off,0,0,tiny.width,tiny.height);ctx.imageSmoothingEnabled=false;ctx.drawImage(tiny,x,y,w,h);ctx.imageSmoothingEnabled=true}
+  else ctx.drawImage(off,x,y,w,h);
+  ctx.strokeStyle=hot?'#ff5a5a':'#ffd84a';ctx.lineWidth=3;rr(ctx,x,y,w,h,4);ctx.stroke();
+  ctx.fillStyle='rgba(20,20,40,.72)';rr(ctx,x+4,y+4,ctx.measureText?Math.max(44,CV_LABEL[k].length*14+16):60,22,6);ctx.fill();
+  otext(CV_LABEL[k],x+12,y+21,14,'#fff',{align:'left',lw:3});
+  if(clickable){TABS.push({x,y,w,h,k});if(inR(mouse,{x,y,w,h})&&mouse.kind==='mouse'){ctx.strokeStyle='#fff';ctx.lineWidth=2;rr(ctx,x+2,y+2,w-4,h-4,4);ctx.stroke()}}
+}
 function drawSidebar(){
   const x=SB+12;
   const bg=ctx.createLinearGradient(0,0,0,H);bg.addColorStop(0,'#4a35a0');bg.addColorStop(1,'#1d1848');ctx.fillStyle=bg;ctx.fillRect(SB,0,W-SB,H);
@@ -673,32 +704,26 @@ function drawSidebar(){
   otext(`적발 ${stats.caught}   ${score}점${combo>1?`   ${combo}콤보`:''}`,x+8,133,16,'#fff',{align:'left',lw:4});
   const s=stareT||lockT;BTN=null;TABS=[];
   if(s&&phase!=='bell'&&state==='play'){
-    const py=152,f=stareT?Math.min(1,stareTime/.8):1,inAct=t-s.seenAct<1.5||s.ring>0;
-    otext(`${s.label}  ${phase==='check'?'입실 검사':inAct?'현장 포착!':f<1?'초점 맞추는 중…':'관찰 중'}`,x,py+12,15,inAct&&phase==='exam'?'#ff6b6b':'#ffe14a',{align:'left',lw:4});
-    const tabs=phase==='check'?[['desk','책상 위 안경'],['body','상체']]:[['face','얼굴 1'],['body','상체 2'],['hands','손 3']];
-    if(!tabs.some(tb=>tb[0]===cview))cview=tabs[0][0];
-    const tw=240/tabs.length;
-    tabs.forEach(([k,l],i)=>{const r={x:x+i*tw,y:py+20,w:tw-5,h:26,k};TABS.push(r);gbtn(r,cview===k?'#ffb81a':'#4a5aa9',l,13,inR(mouse,r))});
-    if(cview==='desk')drawDeskGlasses(octx,s);else if(cview==='body')drawBody(octx,s);else if(cview==='hands')drawHands(octx,s);else drawFace(octx,s);
-    const cy=py+54;
-    ctx.fillStyle=INK;rr(ctx,x-4,cy-4,248,188,8);ctx.fill();
-    if(f<1){const res=Math.max(8,Math.round(240*(.05+.95*f*f)));tiny.width=res;tiny.height=Math.max(6,Math.round(res*.75));tctx.drawImage(off,0,0,tiny.width,tiny.height);ctx.imageSmoothingEnabled=false;ctx.drawImage(tiny,x,cy,240,180);ctx.imageSmoothingEnabled=true}
-    else ctx.drawImage(off,x,cy);
-    ctx.strokeStyle=inAct&&phase==='exam'?'#ff5a5a':'#ffd84a';ctx.lineWidth=3;rr(ctx,x,cy,240,180,4);ctx.stroke();
-    if(f<1)otext('ZOOM',x+200,cy+24,16,'#fff',{font:FT,lw:4});
-    let y2=cy+192;
-    if(phase==='exam'){
-      otext('입실 때 안경',x,y2+25,14,'#fff',{align:'left',lw:3.5});
-      ctx.fillStyle='#fff3d6';rr(ctx,x+128,y2,112,40,8);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.stroke();
-      if(s.rec)miniGlasses(x+184,y2+20,s.rec,.6);else{ctx.fillStyle='#8a6a40';ctx.font=`14px ${FJ}`;ctx.textAlign='center';ctx.fillText('미착용',x+184,y2+25)}
-      y2+=48;
-      otext('불편함',x,y2+14,14,'#fff',{align:'left',lw:3.5});bar(x+56,y2,184,16,s.awk,s.awk>.7?'#ff4040':'#ffb020',s.awk>.7);
-      y2+=24;
+    const py=152,f=Math.min(1,stareTime/.8),inAct=t-s.seenAct<1.5||s.ring>0,hot=inAct&&phase==='exam';
+    otext(`${s.label}  ${phase==='check'?'입실 검사':inAct?'현장 포착!':f<1?'초점 맞추는 중…':'관찰 중'}`,x,py+12,15,hot?'#ff6b6b':'#ffe14a',{align:'left',lw:4});
+    const ks=phase==='check'?['desk','body']:['face','body','hands'];
+    if(zoomK&&!ks.includes(zoomK))zoomK=null;
+    const gy=py+22;
+    if(zoomK){drawPanelView(zoomK,s,x,gy,240,180,f,hot,true);otext('한 번 더 누르면 작게',x+232,gy+172,12,'#fff',{align:'right',lw:3})}
+    else{
+      ks.forEach((k,i)=>drawPanelView(k,s,x+(i%2)*123,gy+Math.floor(i/2)*94,117,88,f,hot,true));
+      if(phase==='exam'){const bx=x+123,by=gy+94;ctx.fillStyle='#fff3d6';rr(ctx,bx,by,117,88,6);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.stroke();
+        ctx.fillStyle='#5a3b22';ctx.font=`13px ${FJ}`;ctx.textAlign='center';ctx.fillText('입실 때 안경',bx+58,by+20);
+        if(s.rec)miniGlasses(bx+58,by+54,s.rec,.5);else{ctx.fillStyle='#8a6a40';ctx.font=`14px ${FJ}`;ctx.fillText('미착용',bx+58,by+58)}}
     }
-    BTN={x,y:y2,w:240,h:44};gbtn(BTN,'#e8262a','적발!',26,inR(mouse,BTN));
+    let y2=gy+190;
+    if(phase==='exam'){otext('불편함',x,y2+14,14,'#fff',{align:'left',lw:3.5});bar(x+56,y2,184,16,s.awk,s.awk>.7?'#ff4040':'#ffb020',s.awk>.7);y2+=26}
+    BTN={x,y:y2,w:240,h:56};gbtn(BTN,'#e8262a','적발!',30,inR(mouse,BTN));
+    ctx.fillStyle='#c9c6f0';ctx.font=`13px ${FJ}`;ctx.textAlign='left';
+    ctx.fillText('창 클릭/숫자키 = 크게 보기',x,y2+78);ctx.fillText('E·스페이스 = 적발 · Esc = 그만 보기',x,y2+96);
   }else if(state==='play'){
-    const lines=phase==='check'?['수험생을 꾹 누르면 책상 위 안경과','상체(옷 단추)를 확대해 볼 수 있어요.','','카메라가 보이면 바로 적발!','멀쩡한 사람을 잡으면 항의가 쌓여요.']
-      :phase==='exam'?['노란 부채꼴이 내 시선이에요.','커닝은 시선 밖에서만 일어나요.','','수상한 손동작이 보이면 재빨리','돌아보고 꾹 눌러 확대!','','확대창에서 얼굴·상체·손 전환','(숫자키 1·2·3)','','폰은 현장을 잡아야 증거가 돼요.','말대꾸(!?)하면 클릭해서 째려보기!']
+    const lines=phase==='check'?['수험생을 클릭하면 책상 위 안경과','상체(옷 단추)를 확대해 볼 수 있어요.','','카메라가 보이면 바로 적발!','멀쩡한 사람을 잡으면 항의가 쌓여요.']
+      :phase==='exam'?['노란 부채꼴이 내 시선이에요.','커닝은 시선 밖에서만 일어나요.','','수상한 손동작이 보이면 재빨리','그 수험생을 클릭해서 관찰!','','얼굴·상체·손이 한 번에 보여요','(숫자키 1·2·3 = 크게 보기)','','폰은 현장을 잡아야 증거가 돼요.','말대꾸(!?)하면 클릭해서 째려보기!']
       :['종료령이 울렸어요!','아직 펜이 움직이는 수험생을','클릭해서 잡으세요!'];
     panel(x-4,154,250,lines.length*22+24,'#25306a');
     ctx.fillStyle='#eef1ff';ctx.font=`15px ${FJ}`;ctx.textAlign='left';lines.forEach((l,i)=>ctx.fillText(l,x+8,180+i*22));
@@ -817,7 +842,7 @@ function drawHow(){
   ctx.save();ctx.beginPath();ctx.rect(-378,-238,756,476);ctx.clip();ctx.strokeStyle='#b9d4ff';ctx.lineWidth=1.5;for(let y=-170;y<240;y+=40){ctx.beginPath();ctx.moveTo(-380,y);ctx.lineTo(380,y);ctx.stroke()}ctx.strokeStyle='#ff9a9a';ctx.beginPath();ctx.moveTo(-320,-240);ctx.lineTo(-320,240);ctx.stroke();ctx.restore();
   ctx.fillStyle='rgba(255,230,120,.75)';ctx.save();ctx.rotate(-.05);ctx.fillRect(-80,-258,160,34);ctx.restore();
   otext('게임 방법',0,-188,48,'#ff9a1a',{font:FT,lw:8});
-  const L=['① 마우스로 시선을 돌려요 (노란 부채꼴 = 내 시선)','② 커닝은 내 시선 밖에서만 일어나요!','③ 수상한 수험생을 꾹~ 누르면 확대해서 볼 수 있어요','④ 얼굴·상체·손을 바꿔 보며 카메라를 찾아요 (1·2·3)','⑤ 확실하면 [적발!] … 틀리면 항의가 쌓여요','⑥ 말대꾸(!?)하는 수험생은 클릭해서 째려보기!','⑦ 종료령이 울리면 펜 움직이는 사람을 클릭!','※ 수험생은 절대 말 안 해요. 손과 눈만 보세요'];
+  const L=[PORT?'① 바닥을 드래그해 시선을 돌려요, 탭하면 걸어가요':'① 마우스로 시선을 돌려요, 바닥 클릭 = 이동','② 커닝은 내 시선 밖에서만 일어나요! (노란 부채꼴)','③ 수상한 수험생을 '+(PORT?'탭':'클릭')+'하면 관찰 시작 (다시 누르면 그만)','④ 얼굴·상체·손이 한 번에 보여요. 카메라를 찾아요','⑤ 확실하면 [적발!] … 틀리면 항의가 쌓여요','⑥ 말대꾸(!?)하는 수험생은 클릭해서 째려보기!','⑦ 종료령이 울리면 펜 움직이는 사람을 클릭!','※ 수험생은 절대 말 안 해요. 손과 눈만 보세요'];
   ctx.textAlign='left';L.forEach((l,i)=>{ctx.fillStyle=i===7?'#e8262a':'#2a2a6a';ctx.font=`24px ${FJ}`;ctx.fillText(l,-300,-140+i*38)});
   ctx.restore();
   HOWBTN=PORT?{x:W/2+220*hk-60,y:H/2+260,w:150,h:60}:{x:W/2+220,y:H/2+170,w:130,h:50};gbtn(HOWBTN,'#e8262a','닫기 X',24,inR(mouse,HOWBTN));
@@ -1160,28 +1185,22 @@ function drawHudPortrait(){
   const s=stareT||lockT;BTN=null;TABS=[];STARTBTN=null;
   if(phase==='check'&&state==='play'){STARTBTN={x:256,y:14,w:156,h:42};gbtn(STARTBTN,'#2f7de1','시험 시작 ▶',19,inR(mouse,STARTBTN))}
   if(s&&phase!=='bell'&&state==='play'){
-    const f=stareT?Math.min(1,stareTime/.8):1,inAct=t-s.seenAct<1.5||s.ring>0;
-    otext(`${s.label}  ${phase==='check'?'입실 검사':inAct?'현장 포착!':f<1?'초점 맞추는 중…':'관찰 중'}`,18,982,17,inAct&&phase==='exam'?'#ff6b6b':'#ffe14a',{align:'left',lw:4});
-    const tabs=phase==='check'?[['desk','책상 위 안경'],['body','상체']]:[['face','얼굴'],['body','상체'],['hands','손']];
-    if(!tabs.some(tb=>tb[0]===cview))cview=tabs[0][0];
-    const tw=300/tabs.length;tabs.forEach(([k,l],i)=>{const r={x:16+i*tw,y:994,w:tw-5,h:30,k};TABS.push(r);gbtn(r,cview===k?'#ffb81a':'#4a5aa9',l,15,inR(mouse,r))});
-    if(cview==='desk')drawDeskGlasses(octx,s);else if(cview==='body')drawBody(octx,s);else if(cview==='hands')drawHands(octx,s);else drawFace(octx,s);
-    const cx=16,cy=1034,cw=300,ch=225;
-    ctx.fillStyle=INK;rr(ctx,cx-4,cy-4,cw+8,ch+8,8);ctx.fill();
-    if(f<1){const res=Math.max(8,Math.round(240*(.05+.95*f*f)));tiny.width=res;tiny.height=Math.max(6,Math.round(res*.75));tctx.drawImage(off,0,0,tiny.width,tiny.height);ctx.imageSmoothingEnabled=false;ctx.drawImage(tiny,cx,cy,cw,ch);ctx.imageSmoothingEnabled=true}
-    else ctx.drawImage(off,cx,cy,cw,ch);
-    ctx.strokeStyle=inAct&&phase==='exam'?'#ff5a5a':'#ffd84a';ctx.lineWidth=3;rr(ctx,cx,cy,cw,ch,4);ctx.stroke();
-    const rx=336;let y2=990;
+    const f=Math.min(1,stareTime/.8),inAct=t-s.seenAct<1.5||s.ring>0,hot=inAct&&phase==='exam';
+    otext(`${s.label}  ${phase==='check'?'입실 검사':inAct?'현장 포착!':f<1?'초점 맞추는 중…':'관찰 중'}`,18,982,18,hot?'#ff6b6b':'#ffe14a',{align:'left',lw:4});
+    zoomK=null;
+    const ks=phase==='check'?['desk','body']:['face','body','hands'];
+    ks.forEach((k,i)=>drawPanelView(k,s,14+i*233,996,224,168,f,hot,false));
+    if(phase==='check'){ctx.fillStyle='#d8d6ff';ctx.font=`17px ${FJ}`;ctx.textAlign='left';ctx.fillText('카메라 렌즈가',496,1060);ctx.fillText('보이면 바로 적발!',496,1086);ctx.fillText('다시 탭 = 그만 보기',496,1120)}
     if(phase==='exam'){
-      otext('입실 때 안경',rx,y2+26,16,'#fff',{align:'left',lw:4});
-      ctx.fillStyle='#fff3d6';rr(ctx,rx+150,y2,218,44,8);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.stroke();
-      if(s.rec)miniGlasses(rx+259,y2+22,s.rec,.7);else{ctx.fillStyle='#8a6a40';ctx.font=`16px ${FJ}`;ctx.textAlign='center';ctx.fillText('미착용',rx+259,y2+28)}
-      y2+=62;otext('불편함',rx,y2+15,16,'#fff',{align:'left',lw:4});bar(rx+70,y2,298,18,s.awk,s.awk>.7?'#ff4040':'#ffb020',s.awk>.7);y2+=36;
-    }else y2+=60;
-    BTN={x:rx,y:Math.max(y2,1120),w:368,h:120};gbtn(BTN,'#e8262a','적발!',44,inR(mouse,BTN));
+      otext('입실 때 안경',18,1204,16,'#fff',{align:'left',lw:4});
+      ctx.fillStyle='#fff3d6';rr(ctx,130,1180,150,44,8);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=2.5;ctx.stroke();
+      if(s.rec)miniGlasses(205,1202,s.rec,.6);else{ctx.fillStyle='#8a6a40';ctx.font=`16px ${FJ}`;ctx.textAlign='center';ctx.fillText('미착용',205,1208)}
+      otext('불편함',18,1256,16,'#fff',{align:'left',lw:4});bar(84,1242,300,18,s.awk,s.awk>.7?'#ff4040':'#ffb020',s.awk>.7);
+    }else{ctx.fillStyle='#d8d6ff';ctx.font=`16px ${FJ}`;ctx.textAlign='left';ctx.fillText('수험생을 다시 탭하거나 바닥을 탭하면',18,1210);ctx.fillText('관찰을 멈춰요',18,1236)}
+    BTN={x:404,y:1178,w:302,h:90};gbtn(BTN,'#e8262a','적발!',42,inR(mouse,BTN));
   }else if(state==='play'){
-    const lines=phase==='check'?['수험생을 꾹 누르면 책상 위 안경과 상체(단추)를','확대해 볼 수 있어요. 카메라가 보이면 바로 적발!','멀쩡한 사람을 잡으면 항의가 쌓여요. 다 봤으면 위의 [시험 시작 ▶]!']
-      :phase==='exam'?['노란 부채꼴이 내 시선. 커닝은 시선 밖에서만 일어나요.','수상하면 그쪽을 탭하고 꾹 눌러 확대!','확대창에서 얼굴·상체·손을 바꿔 보며 카메라를 찾기.','폰은 현장을 잡아야 증거. 통로를 탭하면 이동해요.','말대꾸(!?)하면 탭해서 째려보기!']
+    const lines=phase==='check'?['수험생을 탭하면 책상 위 안경과 상체(단추)를','확대해 볼 수 있어요. 카메라가 보이면 바로 적발!','멀쩡한 사람을 잡으면 항의가 쌓여요. 다 봤으면 위의 [시험 시작 ▶]!']
+      :phase==='exam'?['노란 부채꼴이 내 시선. 커닝은 시선 밖에서만 일어나요.','수상하면 그 수험생을 탭! 얼굴·상체·손이 한 번에 보여요.','바닥을 드래그하면 시선만 돌리고, 탭하면 걸어가요. 카메라를 찾기.','폰은 현장을 잡아야 증거. 통로를 탭하면 이동해요.','말대꾸(!?)하면 탭해서 째려보기!']
       :['종료령이 울렸어요!','아직 펜이 움직이는 수험생을 탭해서 잡으세요!'];
     panel(14,966,W-28,lines.length*30+28,'#25306a');
     ctx.fillStyle='#eef1ff';ctx.font=`19px ${FJ}`;ctx.textAlign='left';lines.forEach((l,i)=>ctx.fillText(l,32,998+i*30));
@@ -1336,7 +1355,7 @@ cv.addEventListener('pointerdown',e=>{
   if(state==='how'){SFX.click();state='intro';return}
   if(state==='select'){for(const c of CARDS)if(inR(p,c)){chooseDiff(c.k);return}return}
   if(state==='result'){if(inR(p,RETRY)){SFX.click();setup()}else if(inR(p,CHANGE)){SFX.click();state='select'}return}
-  for(const r of TABS)if(inR(p,r)){cview=r.k;SFX.click();return}
+  for(const r of TABS)if(inR(p,r)){zoomK=zoomK===r.k?null:r.k;SFX.click();return}
   if(inR(p,BTN)){tryCatch();return}
   if(inR(p,STARTBTN)){SFX.click();startExam();return}
   if(!inRoom(p))return;
@@ -1344,12 +1363,12 @@ cv.addEventListener('pointerdown',e=>{
   if(phase==='bell'){bellCatch(s);return}
   if(e.button===2){if(s)tryCatch(s);return}
   if(s&&s.talk>0&&(phase==='exam'||phase==='check')){glare(s);return}
-  if(s){mouse.down=true;SFX.blip();P.a=Math.atan2(s.y-P.y,s.x-P.x);try{cv.setPointerCapture(e.pointerId)}catch(_){}}
-  else{P.tx=p.x;P.ty=p.y;if(e.pointerType!=='mouse')P.a=Math.atan2(p.y-P.y,p.x-P.x)}
+  if(s){if(s===stareT){stareT=null;stareTime=0;zoomK=null;SFX.click()}else if(s.cd<=0){stareT=s;stareTime=0;zoomK=null;SFX.blip();P.a=Math.atan2(s.y-P.y,s.x-P.x)}else toast('지금은 그 수험생을 볼 수 없어요 (잠깐 쉬기)','#aab');return}
+  floorDown={x:p.x,y:p.y};dragAim=false;try{cv.setPointerCapture(e.pointerId)}catch(_){}
 });
-cv.addEventListener('pointermove',e=>{const p=toCanvas(e);mouse.x=p.x;mouse.y=p.y;mouse.kind=e.pointerType});
-const up=()=>{mouse.down=false};
-cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+cv.addEventListener('pointermove',e=>{const p=toCanvas(e);mouse.x=p.x;mouse.y=p.y;mouse.kind=e.pointerType;if(floorDown&&!dragAim&&Math.hypot(p.x-floorDown.x,p.y-floorDown.y)>14){dragAim=true;P.path=null}});
+const up=()=>{mouse.down=false;if(floorDown&&!dragAim&&state==='play'&&(phase==='check'||phase==='exam')){if(stareT){stareT=null;stareTime=0;zoomK=null}goPath(floorDown.x,floorDown.y)}floorDown=null;dragAim=false};
+cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',()=>{mouse.down=false;floorDown=null;dragAim=false});
 cv.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')mouse.x=-99});
 addEventListener('keydown',e=>{
   if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
@@ -1363,9 +1382,9 @@ addEventListener('keydown',e=>{
   if(state==='how'){state='intro';return}
   if(state==='result'&&(e.code==='Space'||e.code==='Enter')){setup();return}
   if(state==='select'){if(e.code==='Digit1')chooseDiff('하');if(e.code==='Digit2')chooseDiff('중');if(e.code==='Digit3')chooseDiff('상');return}
-  if(e.code==='KeyE'&&state==='play')tryCatch();
-  if(state==='play'&&phase==='exam'){if(e.code==='Digit1')cview='face';if(e.code==='Digit2')cview='body';if(e.code==='Digit3')cview='hands'}
-  if(state==='play'&&phase==='check'){if(e.code==='Digit1')cview='desk';if(e.code==='Digit2')cview='body'}
+  if((e.code==='KeyE'||e.code==='Space')&&state==='play'&&(phase==='check'||phase==='exam')&&stareT)tryCatch();
+  if(e.code==='Escape'&&state==='play'){stareT=null;stareTime=0;zoomK=null}
+  if(state==='play'&&stareT){const ks=phase==='check'?['desk','body']:['face','body','hands'],k=ks[['Digit1','Digit2','Digit3'].indexOf(e.code)];if(k)zoomK=zoomK===k?null:k}
 });
 addEventListener('keyup',e=>{keys[e.code]=false});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=false;mouse.down=false});
