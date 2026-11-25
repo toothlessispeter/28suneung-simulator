@@ -52,7 +52,7 @@ const HEADLINES=[
 
 let state='gate',lt=0,itPrev=0,pops=[],resT=0,stampDone=false,it=0,t=0,phase='',phaseT=0,seats=[],students=[],P,keys={},mouse={x:-99,y:-99,down:false,kind:'mouse',moved:0};
 let stareT=null,stareTime=0,lockT=null,lockLeft=0,msgs=[],sparks=[],leak=0,complaint=0,score=0,combo=0;
-let zoomK=null,floorDown=null,dragAim=false,mw={x:-999,y:-999},JOY={id:null,on:false,bx:0,by:0,x:0,y:0,R:62};
+let zoomK=null,floorDown=null,dragAim=false,mw={x:-999,y:-999},JOY={id:null,on:false,bx:0,by:0,x:0,y:0,R:90};
 const CAM={x:0,y:0,z:1,vx:0,vy:0,vw:0,vh:0};
 function camSetup(snap){
   // 화면에서 교실이 보이는 영역(뷰포트)과 배율
@@ -1180,16 +1180,16 @@ function drawMini(){
   ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.strokeRect(m.x+CAM.x*sx,m.y+CAM.y*sy,CAM.vw/CAM.z*sx,CAM.vh/CAM.z*sy);
   ctx.restore();
 }
-function joyBase(){return{x:CAM.vx+104,y:CAM.vy+CAM.vh-104}}
+function joyBase(){return{x:CAM.vx+136,y:CAM.vy+CAM.vh-136}}
 function drawJoy(){
   const b=JOY.on?{x:JOY.bx,y:JOY.by}:joyBase();
   ctx.save();ctx.globalAlpha=JOY.on?.85:.55;
   ctx.fillStyle='rgba(29,24,72,.45)';ctx.beginPath();ctx.arc(b.x,b.y,JOY.R+10,0,7);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=4;ctx.stroke();
   ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=2;ctx.setLineDash([6,6]);ctx.beginPath();ctx.arc(b.x,b.y,JOY.R-6,0,7);ctx.stroke();ctx.setLineDash([]);
   let kx=b.x,ky=b.y;if(JOY.on){const dx=JOY.x-JOY.bx,dy=JOY.y-JOY.by,d=Math.hypot(dx,dy),k=d>JOY.R?JOY.R/d:1;kx=b.x+dx*k;ky=b.y+dy*k}
-  const g=ctx.createRadialGradient(kx-8,ky-8,4,kx,ky,30);g.addColorStop(0,'#ffe98a');g.addColorStop(1,'#e2a52a');
-  ctx.fillStyle=g;ctx.beginPath();ctx.arc(kx,ky,30,0,7);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=4;ctx.stroke();
-  if(!JOY.on){ctx.globalAlpha=.9;ctx.fillStyle='#fff';ctx.font=`16px ${FJ}`;ctx.textAlign='center';ctx.fillText('이동',b.x,b.y+6)}
+  const g=ctx.createRadialGradient(kx-12,ky-12,6,kx,ky,44);g.addColorStop(0,'#ffe98a');g.addColorStop(1,'#e2a52a');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(kx,ky,44,0,7);ctx.fill();ctx.strokeStyle=INK;ctx.lineWidth=5;ctx.stroke();
+  if(!JOY.on){ctx.globalAlpha=.9;ctx.fillStyle='#fff';ctx.font=`22px ${FJ}`;ctx.textAlign='center';ctx.fillText('이동',b.x,b.y+8)}
   ctx.restore();
 }
 function drawHazard(y,h){
@@ -1399,7 +1399,7 @@ function skipIntro(p){if(it<18){it=17.99;itPrev=17.98}else if(it>18.6){if(!p||in
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('pointerdown',e=>{
   e.preventDefault();ac();const p=toCanvas(e);
-  if(joyActive()&&JOY.id===null){const b=joyBase();if(Math.hypot(p.x-b.x,p.y-b.y)<JOY.R+34){JOY.id=e.pointerId;JOY.on=true;JOY.bx=b.x;JOY.by=b.y;JOY.x=p.x;JOY.y=p.y;try{cv.setPointerCapture(e.pointerId)}catch(_){}return}}
+  if(joyActive()&&JOY.id===null){const b=joyBase();if(Math.hypot(p.x-b.x,p.y-b.y)<JOY.R+40){JOY.id=e.pointerId;JOY.on=true;JOY.bx=b.x;JOY.by=b.y;JOY.x=p.x;JOY.y=p.y;try{cv.setPointerCapture(e.pointerId)}catch(_){}return}}
   mouse.x=p.x;mouse.y=p.y;mouse.kind=e.pointerType;mw=toWorld(p);
   if(state!=='loading'&&inR(p,MUTE)){muted=!muted;SFX.click();return}
   if(state==='gate'){startLoading();return}
