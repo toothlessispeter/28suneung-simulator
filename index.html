@@ -320,7 +320,7 @@ function update(dt){
   if(vx||vy){P.tx=null;P.path=null}
   else if(P.path&&P.path.length){const q=P.path[0],dx=q[0]-P.x,dy=q[1]-P.y,d=Math.hypot(dx,dy);if(d<5){P.path.shift();if(P.path.length){const q2=P.path[0],d2=Math.hypot(q2[0]-P.x,q2[1]-P.y)||1;vx=(q2[0]-P.x)/d2;vy=(q2[1]-P.y)/d2}}else{vx=dx/d;vy=dy/d}}
   const n=Math.hypot(vx,vy);
-  {const SPD=(PORT?250:220)*(stareT&&!stareAuto?.78:1),tvx=n?vx/n*SPD*Math.min(1,n):0,tvy=n?vy/n*SPD*Math.min(1,n):0,k=Math.min(1,dt*(n?14:20));
+  {const SPD=(PORT?250:240)*(stareT&&!stareAuto?.78:1),tvx=n?vx/n*SPD*Math.min(1,n):0,tvy=n?vy/n*SPD*Math.min(1,n):0,k=Math.min(1,dt*(n?14:20));
    P.vx=(P.vx||0)+(tvx-(P.vx||0))*k;P.vy=(P.vy||0)+(tvy-(P.vy||0))*k;
    const sp=Math.hypot(P.vx,P.vy);
    if(sp>4){const ox=P.x,oy=P.y,mx=P.vx*dt,my=P.vy*dt;
@@ -954,7 +954,7 @@ const BOT_BADGE='감독';
 const ITCH_URL='https://ingansidae-end.itch.io';
 let FOLLOW={x:-999,y:-999,w:0,h:0}; // ← 게임마다 바꾸는 소품 (28수능 전용)
 /* ---------- 로딩 캐릭터: 황동 감독봇 (박지훈 그림 바탕, 캔버스 손그림) ---------- */
-const FAN_NOTE='비상업적 개인 프로젝트입니다.';
+const FAN_NOTE='비상업적 플래시게임입니다.';
 /* 스튜디오 메인 캐릭터 '황동봇'. badge=게임별 가슴 배지 글자(28수능='감독'), 없으면 기본 가슴판 */
 function drawBot(x,y,s,talk,badge=BOT_BADGE){
   const BL='#e2b65a',BD='#b98a34',BH='#f8e3a2',BK='#8a6424';
