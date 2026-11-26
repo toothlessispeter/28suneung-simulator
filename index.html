@@ -52,7 +52,7 @@ const HEADLINES=[
 
 let state='gate',lt=0,itPrev=0,pops=[],resT=0,stampDone=false,it=0,t=0,phase='',phaseT=0,seats=[],students=[],P,keys={},mouse={x:-99,y:-99,down:false,kind:'mouse',moved:0};
 let stareAuto=false,autoSkip=null,stareT=null,stareTime=0,lockT=null,lockLeft=0,msgs=[],sparks=[],leak=0,complaint=0,score=0,combo=0;
-let zoomK=null,floorDown=null,dragAim=false,mw={x:-999,y:-999},JOY={id:null,on:false,bx:0,by:0,x:0,y:0,R:90};
+let lastKey=-99,zoomK=null,floorDown=null,dragAim=false,mw={x:-999,y:-999},JOY={id:null,on:false,bx:0,by:0,x:0,y:0,R:90};
 const CAM={x:0,y:0,z:1,vx:0,vy:0,vw:0,vh:0};
 function camSetup(snap){
   // 화면에서 교실이 보이는 영역(뷰포트)과 배율
@@ -320,7 +320,7 @@ function update(dt){
   if(vx||vy){P.tx=null;P.path=null}
   else if(P.path&&P.path.length){const q=P.path[0],dx=q[0]-P.x,dy=q[1]-P.y,d=Math.hypot(dx,dy);if(d<5){P.path.shift();if(P.path.length){const q2=P.path[0],d2=Math.hypot(q2[0]-P.x,q2[1]-P.y)||1;vx=(q2[0]-P.x)/d2;vy=(q2[1]-P.y)/d2}}else{vx=dx/d;vy=dy/d}}
   const n=Math.hypot(vx,vy);
-  {const SPD=250,tvx=n?vx/n*SPD*Math.min(1,n):0,tvy=n?vy/n*SPD*Math.min(1,n):0,k=Math.min(1,dt*(n?14:20));
+  {const SPD=(PORT?250:220)*(stareT&&!stareAuto?.78:1),tvx=n?vx/n*SPD*Math.min(1,n):0,tvy=n?vy/n*SPD*Math.min(1,n):0,k=Math.min(1,dt*(n?14:20));
    P.vx=(P.vx||0)+(tvx-(P.vx||0))*k;P.vy=(P.vy||0)+(tvy-(P.vy||0))*k;
    const sp=Math.hypot(P.vx,P.vy);
    if(sp>4){const ox=P.x,oy=P.y,mx=P.vx*dt,my=P.vy*dt;
@@ -353,9 +353,9 @@ function update(dt){
   let ta=P.a;
   if(stareT)ta=Math.atan2(stareT.y-P.y,stareT.x-P.x);
   else if(n&&(JOY.on||mouse.kind!=='mouse'))ta=Math.atan2(P.vy||vy,P.vx||vx);
-  else if(dragAim||(mouse.kind==='mouse'&&inView(mouse)))ta=Math.atan2(mw.y-P.y,mw.x-P.x);
+  else if(dragAim||(mouse.kind==='mouse'&&inView(mouse))){if(Math.hypot(mw.x-P.x,mw.y-P.y)>48)ta=Math.atan2(mw.y-P.y,mw.x-P.x);else if(n)ta=Math.atan2(vy,vx)}
   else if(n)ta=Math.atan2(vy,vx);
-  let da=ta-P.a;while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;P.a+=da*Math.min(1,dt*(stareT?18:12));
+  let da=ta-P.a;while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;P.a+=da*Math.min(1,dt*(stareT?14:mouse.kind==='mouse'&&!PORT?8:12));
   camFollow(Math.min(1,dt*6));if(mouse.kind==='mouse')mw=toWorld(mouse);
   for(const s of students)updStudent(s,dt);
   phaseT-=dt;
@@ -1448,12 +1448,12 @@ cv.addEventListener('pointerdown',e=>{
   floorDown={x:p.x,y:p.y,wx:w.x,wy:w.y};dragAim=false;try{cv.setPointerCapture(e.pointerId)}catch(_){}
 });
 cv.addEventListener('pointermove',e=>{const p=toCanvas(e);if(e.pointerId===JOY.id){JOY.x=p.x;JOY.y=p.y;const dx=p.x-JOY.bx,dy=p.y-JOY.by,d=Math.hypot(dx,dy),M=JOY.R*1.15;if(d>M){JOY.bx=p.x-dx/d*M;JOY.by=p.y-dy/d*M}return}mouse.x=p.x;mouse.y=p.y;mouse.kind=e.pointerType;mw=toWorld(p);if(floorDown&&!dragAim&&Math.hypot(p.x-floorDown.x,p.y-floorDown.y)>14){dragAim=true;P.path=null}});
-const up=e=>{if(e&&e.pointerId===JOY.id){JOY.id=null;JOY.on=false;return}mouse.down=false;if(floorDown&&!dragAim&&state==='play'&&(phase==='check'||phase==='exam')){if(stareT){if(stareAuto)autoSkip=stareT;stareT=null;stareTime=0;zoomK=null;stareAuto=false}goPath(floorDown.wx,floorDown.wy)}floorDown=null;dragAim=false};
+const up=e=>{if(e&&e.pointerId===JOY.id){JOY.id=null;JOY.on=false;return}mouse.down=false;if(floorDown&&!dragAim&&state==='play'&&(phase==='check'||phase==='exam')){if(stareT){if(stareAuto)autoSkip=stareT;stareT=null;stareTime=0;zoomK=null;stareAuto=false}if(!(mouse.kind==='mouse'&&t-lastKey<5))goPath(floorDown.wx,floorDown.wy)}floorDown=null;dragAim=false};
 cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',e=>{if(e.pointerId===JOY.id){JOY.id=null;JOY.on=false;return}mouse.down=false;floorDown=null;dragAim=false});
 cv.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')mouse.x=-99});
 addEventListener('keydown',e=>{
   if(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
-  ac();keys[e.code]=true;if(e.repeat)return;
+  ac();keys[e.code]=true;if(/^(Key[WASD]|Arrow)/.test(e.code))lastKey=t;if(e.repeat)return;
   if(e.code==='KeyM'){muted=!muted;return}
   if(e.code==='KeyB'){musicOn=!musicOn;return}
   if(state==='gate'&&(e.code==='Space'||e.code==='Enter')){startLoading();return}
