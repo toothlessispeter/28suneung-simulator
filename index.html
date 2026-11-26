@@ -176,10 +176,13 @@ function evidence(s){
   if(s.type==='phone'&&(s.ring>0||t-s.seenAct<1.5))return'phone';
   return null;
 }
+const NEAR_R=()=>PORT?100:90;
+function nearK(s){if(!s||!P)return 1;const d=Math.hypot(s.x-P.x,s.y-P.y),R=NEAR_R();return d<=R*1.15?1:clamp(1-(d-R*1.15)/(R*2.4),.1,.95)}
 function tryCatch(s){
   s=s||stareT||lockT;
   if(!s||s.caught){toast('먼저 수험생을 탭해서 관찰하세요','#aab');return}
   if(phase!=='check'&&phase!=='exam')return;
+  if(nearK(s)<1){toast('너무 멀어요! 가까이 가서 확인하세요','#ffb020');SFX.boing();goPath(s.x,s.y+8);return}
   const ev=evidence(s);
   if(s.cheat&&ev){
     s.caught=true;stats.caught++;combo++;
@@ -342,7 +345,7 @@ function update(dt){
     lockT=null;
     if(stareT){
       stareTime+=dt;
-      if(phase==='check')stareT.inspected=stareTime>.8||stareT.inspected;
+      if(phase==='check')stareT.inspected=(stareTime>.8&&nearK(stareT)>=1)||stareT.inspected;
       else{if(!(stareAuto&&n))stareT.awk+=dt*.3;if(stareT.awk>=1){complaint+=10;combo=0;say(stareT,pick(['왜 계속 보세요?','집중이 안 돼요…','아 진짜 왜요?']));stareT.talk=2.6;stareT.cd=4;stareT.awk=0;toast('너무 오래 봤어요! 항의 +10','#ff8a65');SFX.boing();pop('항의!',stareT.x,stareT.y-44,'#ff8a3a',30);lockT=null;stareT=null;stareTime=0}}
     }
   }
@@ -746,8 +749,8 @@ function drawSidebar(){
   otext(`적발 ${stats.caught}   ${score}점${combo>1?`   ${combo}콤보`:''}`,x+8,133,16,'#fff',{align:'left',lw:4});
   const s=stareT||lockT;BTN=null;TABS=[];
   if(s&&phase!=='bell'&&state==='play'){
-    const py=152,f=Math.min(1,stareTime/.8),inAct=t-s.seenAct<1.5||s.ring>0,hot=inAct&&phase==='exam';
-    otext(`${s.label}  ${phase==='check'?'입실 검사':inAct?'현장 포착!':f<1?'초점 맞추는 중…':'관찰 중'}`,x,py+12,15,hot?'#ff6b6b':'#ffe14a',{align:'left',lw:4});
+    const py=152,nk=nearK(s),f=Math.min(1,stareTime/.8,nk),inAct=t-s.seenAct<1.5||s.ring>0,hot=inAct&&phase==='exam';
+    otext(`${s.label}  ${phase==='check'?'입실 검사':nk<1?'멀어서 흐릿해요 → 가까이!':inAct?'현장 포착!':f<1?'초점 맞추는 중…':'관찰 중'}`,x,py+12,15,hot?'#ff6b6b':'#ffe14a',{align:'left',lw:4});
     const ks=phase==='check'?['desk','body']:['face','body','hands'];
     if(zoomK&&!ks.includes(zoomK))zoomK=null;
     const gy=py+22;
@@ -760,7 +763,7 @@ function drawSidebar(){
     }
     let y2=gy+190;
     if(phase==='exam'){otext('불편함',x,y2+14,14,'#fff',{align:'left',lw:3.5});bar(x+56,y2,184,16,s.awk,s.awk>.7?'#ff4040':'#ffb020',s.awk>.7);y2+=26}
-    BTN={x,y:y2,w:240,h:56};gbtn(BTN,'#e8262a','적발!',30,inR(mouse,BTN));
+    BTN={x,y:y2,w:240,h:56};gbtn(BTN,nk<1?'#ff9a1a':'#e8262a',nk<1?'다가가기 ▶':'적발!',30,inR(mouse,BTN));
     ctx.fillStyle='#c9c6f0';ctx.font=`13px ${FJ}`;ctx.textAlign='left';
     ctx.fillText('창 클릭/숫자키 = 크게 보기',x,y2+78);ctx.fillText('E·스페이스 = 적발 · Esc = 그만 보기',x,y2+96);
   }else if(state==='play'){
@@ -1255,8 +1258,8 @@ function drawHudPortrait(){
   const s=stareT||lockT;BTN=null;TABS=[];STARTBTN=null;
   if(phase==='check'&&state==='play'){STARTBTN={x:256,y:14,w:156,h:42};gbtn(STARTBTN,'#2f7de1','시험 시작 ▶',19,inR(mouse,STARTBTN))}
   if(s&&phase!=='bell'&&state==='play'){
-    const f=Math.min(1,stareTime/.8),inAct=t-s.seenAct<1.5||s.ring>0,hot=inAct&&phase==='exam';
-    otext(`${s.label}  ${phase==='check'?'입실 검사':inAct?'현장 포착!':f<1?'초점 맞추는 중…':'관찰 중'}`,18,982,18,hot?'#ff6b6b':'#ffe14a',{align:'left',lw:4});
+    const nk=nearK(s),f=Math.min(1,stareTime/.8,nk),inAct=t-s.seenAct<1.5||s.ring>0,hot=inAct&&phase==='exam';
+    otext(`${s.label}  ${phase==='check'?'입실 검사':nk<1?'멀어서 흐릿해요 → 가까이!':inAct?'현장 포착!':f<1?'초점 맞추는 중…':'관찰 중'}`,18,982,18,hot?'#ff6b6b':'#ffe14a',{align:'left',lw:4});
     zoomK=null;
     const ks=phase==='check'?['desk','body']:['face','body','hands'];
     ks.forEach((k,i)=>drawPanelView(k,s,14+i*233,996,224,168,f,hot,false));
@@ -1267,7 +1270,7 @@ function drawHudPortrait(){
       if(s.rec)miniGlasses(205,1202,s.rec,.6);else{ctx.fillStyle='#8a6a40';ctx.font=`16px ${FJ}`;ctx.textAlign='center';ctx.fillText('미착용',205,1208)}
       otext('불편함',18,1256,16,'#fff',{align:'left',lw:4});bar(84,1242,300,18,s.awk,s.awk>.7?'#ff4040':'#ffb020',s.awk>.7);
     }else{ctx.fillStyle='#d8d6ff';ctx.font=`16px ${FJ}`;ctx.textAlign='left';ctx.fillText('수험생을 다시 탭하거나 바닥을 탭하면',18,1210);ctx.fillText('관찰을 멈춰요',18,1236)}
-    BTN={x:404,y:1178,w:302,h:90};gbtn(BTN,'#e8262a','적발!',42,inR(mouse,BTN));
+    BTN={x:404,y:1178,w:302,h:90};gbtn(BTN,nk<1?'#ff9a1a':'#e8262a',nk<1?'다가가기 ▶':'적발!',38,inR(mouse,BTN));
   }else if(state==='play'){
     const lines=phase==='check'?['수험생 옆으로 가거나 탭하면 안경과 상체(단추)가','크게 보여요. 카메라가 보이면 바로 적발!','멀쩡한 사람을 잡으면 항의가 쌓여요. 다 봤으면 위의 [시험 시작 ▶]!']
       :phase==='exam'?['노란 부채꼴이 내 시선. 커닝은 시선 밖에서만 일어나요.','수상하면 그 수험생을 탭! 얼굴·상체·손이 한 번에 보여요.','바닥을 드래그하면 시선만 돌리고, 탭하면 걸어가요. 카메라를 찾기.','폰은 현장을 잡아야 증거. 통로를 탭하면 이동해요.','말대꾸(!?)하면 탭해서 째려보기!']
